@@ -90,7 +90,7 @@ function classifyHttpError(error: HttpError): ClassifiedError {
   if (error.status >= 500 && error.status < 600) {
     return {
       title: "Server error",
-      hint: "Yahoo Finance is having issues. Try again in a few minutes.",
+      hint: "The stock API is having issues. Try again in a few minutes.",
     };
   }
   return {
