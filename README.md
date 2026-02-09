@@ -34,12 +34,16 @@ The sections below map each Effect concept to the file and pattern where it appe
 
 ### Services and Tags
 
-`stock-api.ts` defines a **service interface** using `Context.Tag`. The `StockApi` tag describes *what* the application needs (a way to get a stock quote) without saying *how*.
+`stock-api.ts` defines a **service interface** using `Context.Tag`. The `StockApi` tag describes _what_ the application needs (a way to get a stock quote) without saying _how_.
 
 ```ts
 export class StockApi extends Context.Tag("StockApi")<
   StockApi,
-  { readonly getQuote: (symbol: string) => Effect.Effect<StockQuote, StockApiError> }
+  {
+    readonly getQuote: (
+      symbol: string,
+    ) => Effect.Effect<StockQuote, StockApiError>;
+  }
 >() {}
 ```
 
@@ -49,11 +53,11 @@ The command handler in `main.ts` consumes the service with `yield* StockApi` —
 
 Each provider file exports a **Layer** that satisfies the `StockApi` tag:
 
-| Layer | File | Dependencies |
-|---|---|---|
-| `YahooFinanceLive` | `providers/yahoo-finance.ts` | `HttpClient` |
-| `AlphaVantageLive` | `providers/alpha-vantage.ts` | `HttpClient`, `Config("ALPHA_VANTAGE_API_KEY")` |
-| `StockApiTestLive` | `providers/stock-api-mock.ts` | *none* |
+| Layer              | File                          | Dependencies                                    |
+| ------------------ | ----------------------------- | ----------------------------------------------- |
+| `YahooFinanceLive` | `providers/yahoo-finance.ts`  | `HttpClient`                                    |
+| `AlphaVantageLive` | `providers/alpha-vantage.ts`  | `HttpClient`, `Config("ALPHA_VANTAGE_API_KEY")` |
+| `StockApiTestLive` | `providers/stock-api-mock.ts` | _none_                                          |
 
 `main.ts` uses `Layer.unwrapEffect` to pick the right layer at startup based on config:
 
@@ -64,9 +68,12 @@ const StockApiLive = Layer.unwrapEffect(
       Config.withDefault("yahoo"),
     );
     switch (provider) {
-      case "alphavantage": return AlphaVantageLive;
-      case "test":         return StockApiTestLive;
-      default:             return YahooFinanceLive;
+      case "alphavantage":
+        return AlphaVantageLive;
+      case "test":
+        return StockApiTestLive;
+      default:
+        return YahooFinanceLive;
     }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer));
@@ -79,10 +86,21 @@ This is the core architectural idea: business logic depends on the interface, th
 `stock-api.ts` defines a closed set of error types using discriminated unions:
 
 ```ts
-export class NetworkError extends Data.TaggedError("NetworkError")<{ readonly message: string }> {}
-export class HttpError    extends Data.TaggedError("HttpError")<{ readonly status: number }> {}
-export class ParseError   extends Data.TaggedError("ParseError")<{ readonly message: string }> {}
-export class ApiError      extends Data.TaggedError("ApiError")<{ readonly message: string }> {}
+export class NetworkError extends Data.TaggedError("NetworkError")<{
+  readonly message: string;
+}> {}
+export class HttpError extends Data.TaggedError("HttpError")<{
+  readonly status: number;
+}> {}
+export class ParseError extends Data.TaggedError("ParseError")<{
+  readonly message: string;
+}> {}
+export class SymbolNotFound extends Data.TaggedError("SymbolNotFound")<{
+  readonly symbol: string;
+}> {}
+export class ServiceError extends Data.TaggedError("ServiceError")<{
+  readonly message: string;
+}> {}
 ```
 
 The `_tag` field enables exhaustive handling via `Effect.catchTags` — the compiler ensures every error case is covered. See `main.ts` for the top-level handler, and `format.ts` for user-friendly error classification.
@@ -99,10 +117,10 @@ Key pattern: parse once at the edge, then work with known-good types everywhere 
 
 ```ts
 Effect.gen(function* () {
-  const api = yield* StockApi;               // access a service
+  const api = yield* StockApi; // access a service
   const quote = yield* api.getQuote(symbol); // run an effectful operation
-  yield* Console.log(formatQuote(quote));     // perform a side effect
-})
+  yield* Console.log(formatQuote(quote)); // perform a side effect
+});
 ```
 
 ### Config — environment-driven setup
@@ -125,10 +143,10 @@ api.getQuote(symbol).pipe(
       Schedule.compose(Schedule.recurs(2)),
     ),
   }),
-)
+);
 ```
 
-Only `NetworkError` triggers a retry (up to 2 retries with exponential backoff). An `ApiError` or `ParseError` fails immediately — retrying won't help.
+Only `NetworkError` triggers a retry (up to 2 retries with exponential backoff). Other errors like `ParseError` or `SymbolNotFound` fail immediately — retrying won't help.
 
 ### HttpClient
 
@@ -150,11 +168,11 @@ These aren't Effect-specific, but the codebase demonstrates them:
 
 ## Providers
 
-| Provider | Auth | Rate limits | Notes |
-|---|---|---|---|
-| Yahoo Finance | None | Unofficial, undocumented | Default. Uses the undocumented `/v8/finance/chart` endpoint. |
-| Alpha Vantage | Free API key | 25 calls/day, 5/min | [Get a key](https://www.alphavantage.co/support/#api-key). Does not return currency (defaults to USD). |
-| Mock | None | None | Returns canned data for AAPL, GOOGL, TSLA. Useful for development and testing. |
+| Provider      | Auth         | Rate limits              | Notes                                                                                                  |
+| ------------- | ------------ | ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Yahoo Finance | None         | Unofficial, undocumented | Default. Uses the undocumented `/v8/finance/chart` endpoint.                                           |
+| Alpha Vantage | Free API key | 25 calls/day, 5/min      | [Get a key](https://www.alphavantage.co/support/#api-key). Does not return currency (defaults to USD). |
+| Mock          | None         | None                     | Returns canned data for AAPL, GOOGL, TSLA. Useful for development and testing.                         |
 
 ## Running tests
 
