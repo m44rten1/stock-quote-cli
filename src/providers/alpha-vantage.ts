@@ -91,41 +91,47 @@ function toStockQuote(
   });
 }
 
+// --- Alpha Vantage service construction ---
+
+/** Build the raw Alpha Vantage service object.
+ *  Exported so the fallback layer can reuse it without going through the tag. */
+export const makeAlphaVantageApi = Effect.gen(function* () {
+  const client = (yield* HttpClient.HttpClient).pipe(
+    HttpClient.filterStatusOk,
+  );
+  const apiKey = yield* Config.string("ALPHA_VANTAGE_API_KEY");
+  const baseUrl = yield* Config.string("ALPHA_VANTAGE_BASE_URL").pipe(
+    Config.withDefault("https://www.alphavantage.co/query"),
+  );
+
+  return {
+    getQuote: (symbol: string) =>
+      Effect.gen(function* () {
+        const url =
+          `${baseUrl}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+        const response = yield* client.get(url);
+        const json = yield* response.json;
+        return yield* decodeAlphaVantageResponse(json, symbol);
+      }).pipe(
+        Effect.catchTags({
+          RequestError: (e) =>
+            Effect.fail(new NetworkError({ message: e.message })),
+          ResponseError: (e) =>
+            e.reason === "StatusCode"
+              ? Effect.fail(new HttpError({ status: e.response.status }))
+              : Effect.fail(
+                  new ParseError({
+                    message: `JSON parse failed: ${e.message}`,
+                  }),
+                ),
+        }),
+      ),
+  };
+});
+
 // --- Alpha Vantage layer ---
 
 export const AlphaVantageLive = Layer.effect(
   StockApi,
-  Effect.gen(function* () {
-    const client = (yield* HttpClient.HttpClient).pipe(
-      HttpClient.filterStatusOk,
-    );
-    const apiKey = yield* Config.string("ALPHA_VANTAGE_API_KEY");
-    const baseUrl = yield* Config.string("ALPHA_VANTAGE_BASE_URL").pipe(
-      Config.withDefault("https://www.alphavantage.co/query"),
-    );
-
-    return StockApi.of({
-      getQuote: (symbol: string) =>
-        Effect.gen(function* () {
-          const url =
-            `${baseUrl}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
-          const response = yield* client.get(url);
-          const json = yield* response.json;
-          return yield* decodeAlphaVantageResponse(json, symbol);
-        }).pipe(
-          Effect.catchTags({
-            RequestError: (e) =>
-              Effect.fail(new NetworkError({ message: e.message })),
-            ResponseError: (e) =>
-              e.reason === "StatusCode"
-                ? Effect.fail(new HttpError({ status: e.response.status }))
-                : Effect.fail(
-                    new ParseError({
-                      message: `JSON parse failed: ${e.message}`,
-                    }),
-                  ),
-          }),
-        ),
-    });
-  }),
+  makeAlphaVantageApi.pipe(Effect.map(StockApi.of)),
 );

@@ -90,43 +90,49 @@ function interpretYahooResponse(
   });
 }
 
+// --- Yahoo Finance service construction ---
+
+/** Build the raw Yahoo Finance service object.
+ *  Exported so the fallback layer can reuse it without going through the tag. */
+export const makeYahooFinanceApi = Effect.gen(function* () {
+  const client = (yield* HttpClient.HttpClient).pipe(
+    HttpClient.filterStatusOk,
+    HttpClient.mapRequest(
+      HttpClientRequest.setHeader("User-Agent", "Mozilla/5.0"),
+    ),
+  );
+  const baseUrl = yield* Config.string("YAHOO_BASE_URL").pipe(
+    Config.withDefault("https://query1.finance.yahoo.com/v8/finance/chart"),
+  );
+
+  return {
+    getQuote: (symbol: string) =>
+      Effect.gen(function* () {
+        const response = yield* client.get(
+          `${baseUrl}/${encodeURIComponent(symbol)}`,
+        );
+        const json = yield* response.json;
+        return yield* decodeYahooResponse(json, symbol);
+      }).pipe(
+        Effect.catchTags({
+          RequestError: (e) =>
+            Effect.fail(new NetworkError({ message: e.message })),
+          ResponseError: (e) =>
+            e.reason === "StatusCode"
+              ? Effect.fail(new HttpError({ status: e.response.status }))
+              : Effect.fail(
+                  new ParseError({
+                    message: `JSON parse failed: ${e.message}`,
+                  }),
+                ),
+        }),
+      ),
+  };
+});
+
 // --- Yahoo Finance layer ---
 
 export const YahooFinanceLive = Layer.effect(
   StockApi,
-  Effect.gen(function* () {
-    const client = (yield* HttpClient.HttpClient).pipe(
-      HttpClient.filterStatusOk,
-      HttpClient.mapRequest(
-        HttpClientRequest.setHeader("User-Agent", "Mozilla/5.0"),
-      ),
-    );
-    const baseUrl = yield* Config.string("YAHOO_BASE_URL").pipe(
-      Config.withDefault("https://query1.finance.yahoo.com/v8/finance/chart"),
-    );
-
-    return StockApi.of({
-      getQuote: (symbol: string) =>
-        Effect.gen(function* () {
-          const response = yield* client.get(
-            `${baseUrl}/${encodeURIComponent(symbol)}`,
-          );
-          const json = yield* response.json;
-          return yield* decodeYahooResponse(json, symbol);
-        }).pipe(
-          Effect.catchTags({
-            RequestError: (e) =>
-              Effect.fail(new NetworkError({ message: e.message })),
-            ResponseError: (e) =>
-              e.reason === "StatusCode"
-                ? Effect.fail(new HttpError({ status: e.response.status }))
-                : Effect.fail(
-                    new ParseError({
-                      message: `JSON parse failed: ${e.message}`,
-                    }),
-                  ),
-          }),
-        ),
-    });
-  }),
+  makeYahooFinanceApi.pipe(Effect.map(StockApi.of)),
 );

@@ -2,7 +2,7 @@ import { Command, Options, Prompt } from "@effect/cli";
 import { FetchHttpClient } from "@effect/platform";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import process from "node:process";
-import { Config, Console, Effect, Layer, Schedule } from "effect";
+import { Config, Console, Effect, Layer, Logger, LogLevel, Schedule } from "effect";
 import {
   NetworkError,
   StockApi,
@@ -12,6 +12,7 @@ import {
 import { YahooFinanceLive } from "./src/providers/yahoo-finance.ts";
 import { AlphaVantageLive } from "./src/providers/alpha-vantage.ts";
 import { StockApiTestLive } from "./src/providers/stock-api-mock.ts";
+import { FallbackStockApiLive } from "./src/stock-api-fallback.ts";
 import { formatError, formatQuote } from "./src/format.ts";
 
 // --- CLI ---
@@ -52,8 +53,27 @@ const command = Command.make("stock-quote", { symbol }).pipe(
 );
 
 // --- Layers ---
-// Set STOCK_PROVIDER to "yahoo" (default), "alphavantage", or "test".
 
+// Set LOG_LEVEL=debug to see circuit breaker and fallback diagnostics.
+const LogLevelLive = Layer.unwrapEffect(
+  Config.string("LOG_LEVEL").pipe(
+    Config.withDefault("info"),
+    Effect.map((level) => {
+      switch (level.toLowerCase()) {
+        case "debug":
+          return Logger.minimumLogLevel(LogLevel.Debug);
+        case "warning":
+          return Logger.minimumLogLevel(LogLevel.Warning);
+        case "error":
+          return Logger.minimumLogLevel(LogLevel.Error);
+        default:
+          return Logger.minimumLogLevel(LogLevel.Info);
+      }
+    }),
+  ),
+);
+
+// Set STOCK_PROVIDER to "yahoo" (default), "alphavantage", "fallback", or "test".
 const StockApiLive = Layer.unwrapEffect(
   Effect.gen(function* () {
     const provider = yield* Config.string("STOCK_PROVIDER").pipe(
@@ -62,6 +82,8 @@ const StockApiLive = Layer.unwrapEffect(
     switch (provider) {
       case "alphavantage":
         return AlphaVantageLive;
+      case "fallback":
+        return FallbackStockApiLive;
       case "test":
         return StockApiTestLive;
       default:
@@ -88,6 +110,7 @@ cli(process.argv).pipe(
     ServiceError: logApiError,
   }),
   Effect.provide(StockApiLive),
+  Effect.provide(LogLevelLive),
   Effect.provide(NodeContext.layer),
   NodeRuntime.runMain,
 );
