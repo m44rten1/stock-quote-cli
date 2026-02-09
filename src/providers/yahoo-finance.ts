@@ -4,10 +4,10 @@ import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { Config, Effect, Layer, Schema } from "effect";
 import type { StockQuote } from "../domain.ts";
 import {
-  ApiError,
   HttpError,
   NetworkError,
   ParseError,
+  SymbolNotFound,
   StockApi,
 } from "../stock-api.ts";
 
@@ -39,7 +39,8 @@ type YahooChartResponseType = typeof YahooChartResponse.Type;
 
 export function decodeYahooResponse(
   json: unknown,
-): Effect.Effect<StockQuote, ParseError | ApiError> {
+  symbol: string,
+): Effect.Effect<StockQuote, ParseError | SymbolNotFound> {
   return Schema.decodeUnknown(YahooChartResponse)(json).pipe(
     Effect.mapError(
       (schemaError) =>
@@ -47,29 +48,22 @@ export function decodeYahooResponse(
           message: `Invalid response: ${schemaError.message}`,
         }),
     ),
-    Effect.flatMap(interpretYahooResponse),
+    Effect.flatMap((response) => interpretYahooResponse(response, symbol)),
   );
 }
 
 function interpretYahooResponse(
   response: YahooChartResponseType,
-): Effect.Effect<StockQuote, ParseError | ApiError> {
+  symbol: string,
+): Effect.Effect<StockQuote, ParseError | SymbolNotFound> {
   const { chart } = response;
 
   if (chart.error !== null) {
-    return Effect.fail(
-      new ApiError({
-        message: chart.error.description ?? "Unknown API error",
-      }),
-    );
+    return Effect.fail(new SymbolNotFound({ symbol }));
   }
 
   if (chart.result === null || chart.result.length === 0) {
-    return Effect.fail(
-      new ApiError({
-        message: "No data found for the requested symbol",
-      }),
-    );
+    return Effect.fail(new SymbolNotFound({ symbol }));
   }
 
   const meta = chart.result[0].meta;
@@ -118,7 +112,7 @@ export const YahooFinanceLive = Layer.effect(
             `${baseUrl}/${encodeURIComponent(symbol)}`,
           );
           const json = yield* response.json;
-          return yield* decodeYahooResponse(json);
+          return yield* decodeYahooResponse(json, symbol);
         }).pipe(
           Effect.catchTags({
             RequestError: (e) =>

@@ -2,7 +2,7 @@
 
 import { Effect, Layer } from "effect";
 import type { StockQuote } from "../domain.ts";
-import { ApiError, StockApi } from "../stock-api.ts";
+import { SymbolNotFound, StockApi } from "../stock-api.ts";
 
 // --- Sample data ---
 
@@ -42,9 +42,7 @@ export const StockApiTestLive = Layer.succeed(
       const quote = quotes[symbol.toUpperCase()];
       return quote !== undefined
         ? Effect.succeed(quote)
-        : Effect.fail(
-            new ApiError({ message: `Unknown symbol: ${symbol}` }),
-          );
+        : Effect.fail(new SymbolNotFound({ symbol }));
     },
   }),
 );

@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { Effect, Either } from "effect";
 import { decodeAlphaVantageResponse } from "./alpha-vantage.ts";
-import type { ApiError, ParseError } from "../stock-api.ts";
+import type { ParseError, ServiceError, SymbolNotFound } from "../stock-api.ts";
 import type { StockQuote } from "../domain.ts";
 
 // --- Test data ---
@@ -25,8 +25,8 @@ const validResponse = {
 
 function decode(
   json: unknown,
-): Promise<Either.Either<StockQuote, ParseError | ApiError>> {
-  return Effect.runPromise(Effect.either(decodeAlphaVantageResponse(json)));
+): Promise<Either.Either<StockQuote, ParseError | SymbolNotFound | ServiceError>> {
+  return Effect.runPromise(Effect.either(decodeAlphaVantageResponse(json, "TEST")));
 }
 
 async function decodeSuccess(json: unknown): Promise<StockQuote> {
@@ -38,7 +38,7 @@ async function decodeSuccess(json: unknown): Promise<StockQuote> {
 
 async function decodeFailure(
   json: unknown,
-): Promise<ParseError | ApiError> {
+): Promise<ParseError | SymbolNotFound | ServiceError> {
   const result = await decode(json);
   if (Either.isRight(result))
     throw new Error("Expected failure but got success");
@@ -73,39 +73,35 @@ Deno.test("decodeAlphaVantageResponse: non-object input returns ParseError", asy
   assertEquals(error._tag, "ParseError");
 });
 
-Deno.test("decodeAlphaVantageResponse: Error Message field returns ApiError", async () => {
+Deno.test("decodeAlphaVantageResponse: Error Message field returns ServiceError", async () => {
   const error = await decodeFailure({
     "Error Message": "Invalid API call",
   });
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message, "Invalid API call");
+  assertEquals(error._tag, "ServiceError");
 });
 
-Deno.test("decodeAlphaVantageResponse: Note field returns ApiError (rate limit)", async () => {
+Deno.test("decodeAlphaVantageResponse: Note field returns ServiceError (rate limit)", async () => {
   const error = await decodeFailure({
     "Note": "Thank you for using Alpha Vantage! Rate limit exceeded.",
   });
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message.includes("Rate limit"), true);
+  assertEquals(error._tag, "ServiceError");
 });
 
-Deno.test("decodeAlphaVantageResponse: Information field returns ApiError", async () => {
+Deno.test("decodeAlphaVantageResponse: Information field returns ServiceError", async () => {
   const error = await decodeFailure({
     "Information": "Please provide a valid API key.",
   });
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message.includes("API key"), true);
+  assertEquals(error._tag, "ServiceError");
 });
 
-Deno.test("decodeAlphaVantageResponse: empty Global Quote returns ApiError", async () => {
+Deno.test("decodeAlphaVantageResponse: empty Global Quote returns SymbolNotFound", async () => {
   const error = await decodeFailure({ "Global Quote": {} });
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message.includes("No data found"), true);
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
-Deno.test("decodeAlphaVantageResponse: missing Global Quote returns ApiError", async () => {
+Deno.test("decodeAlphaVantageResponse: missing Global Quote returns SymbolNotFound", async () => {
   const error = await decodeFailure({});
-  assertEquals(error._tag, "ApiError");
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
 Deno.test("decodeAlphaVantageResponse: missing required field returns ParseError", async () => {

@@ -56,10 +56,15 @@ function classifyError(error: StockApiError): ClassifiedError {
       };
     case "HttpError":
       return classifyHttpError(error);
-    case "ApiError":
+    case "SymbolNotFound":
       return {
         title: "Symbol not found",
         hint: "Double-check the ticker symbol and try again (e.g. AAPL, GOOGL, TSLA).",
+      };
+    case "ServiceError":
+      return {
+        title: "Service unavailable",
+        hint: error.message,
       };
     case "ParseError":
       return {

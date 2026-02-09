@@ -17,11 +17,20 @@ export class ParseError extends Data.TaggedError("ParseError")<{
   readonly message: string;
 }> {}
 
-export class ApiError extends Data.TaggedError("ApiError")<{
+export class SymbolNotFound extends Data.TaggedError("SymbolNotFound")<{
+  readonly symbol: string;
+}> {}
+
+export class ServiceError extends Data.TaggedError("ServiceError")<{
   readonly message: string;
 }> {}
 
-export type StockApiError = NetworkError | HttpError | ParseError | ApiError;
+export type StockApiError =
+  | NetworkError
+  | HttpError
+  | ParseError
+  | SymbolNotFound
+  | ServiceError;
 
 // --- Service ---
 

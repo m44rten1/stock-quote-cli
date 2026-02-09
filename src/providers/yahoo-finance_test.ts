@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { Effect, Either } from "effect";
 import { decodeYahooResponse } from "./yahoo-finance.ts";
-import type { ApiError, ParseError } from "../stock-api.ts";
+import type { ParseError, SymbolNotFound } from "../stock-api.ts";
 import type { StockQuote } from "../domain.ts";
 
 // --- Test data ---
@@ -25,8 +25,8 @@ const validYahooResponse = {
 
 // --- Helpers ---
 
-function decode(json: unknown): Promise<Either.Either<StockQuote, ParseError | ApiError>> {
-  return Effect.runPromise(Effect.either(decodeYahooResponse(json)));
+function decode(json: unknown): Promise<Either.Either<StockQuote, ParseError | SymbolNotFound>> {
+  return Effect.runPromise(Effect.either(decodeYahooResponse(json, "TEST")));
 }
 
 async function decodeSuccess(json: unknown): Promise<StockQuote> {
@@ -35,7 +35,7 @@ async function decodeSuccess(json: unknown): Promise<StockQuote> {
   return result.right;
 }
 
-async function decodeFailure(json: unknown): Promise<ParseError | ApiError> {
+async function decodeFailure(json: unknown): Promise<ParseError | SymbolNotFound> {
   const result = await decode(json);
   if (Either.isRight(result)) throw new Error("Expected failure but got success");
   return result.left;
@@ -70,14 +70,14 @@ Deno.test("decodeYahooResponse: missing chart field returns ParseError", async (
   assertEquals(error._tag, "ParseError");
 });
 
-Deno.test("decodeYahooResponse: empty results array returns ApiError", async () => {
+Deno.test("decodeYahooResponse: empty results array returns SymbolNotFound", async () => {
   const error = await decodeFailure({ chart: { result: [], error: null } });
-  assertEquals(error._tag, "ApiError");
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
-Deno.test("decodeYahooResponse: null result without error returns ApiError (invalid symbol)", async () => {
+Deno.test("decodeYahooResponse: null result without error returns SymbolNotFound (invalid symbol)", async () => {
   const error = await decodeFailure({ chart: { result: null, error: null } });
-  assertEquals(error._tag, "ApiError");
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
 Deno.test("decodeYahooResponse: missing price returns ParseError", async () => {
@@ -100,7 +100,7 @@ Deno.test("decodeYahooResponse: missing price returns ParseError", async () => {
   assertEquals(error._tag, "ParseError");
 });
 
-Deno.test("decodeYahooResponse: API error is surfaced", async () => {
+Deno.test("decodeYahooResponse: API error is surfaced as SymbolNotFound", async () => {
   const input = {
     chart: {
       result: null,
@@ -108,8 +108,7 @@ Deno.test("decodeYahooResponse: API error is surfaced", async () => {
     },
   };
   const error = await decodeFailure(input);
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message.includes("No data found"), true);
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
 Deno.test("decodeYahooResponse: falls back to previousClose when chartPreviousClose is missing", async () => {
@@ -198,7 +197,7 @@ Deno.test("decodeYahooResponse: non-object chart field returns ParseError", asyn
   assertEquals(error._tag, "ParseError");
 });
 
-Deno.test("decodeYahooResponse: API error without description gives fallback message", async () => {
+Deno.test("decodeYahooResponse: API error without description returns SymbolNotFound", async () => {
   const input = {
     chart: {
       result: null,
@@ -206,8 +205,7 @@ Deno.test("decodeYahooResponse: API error without description gives fallback mes
     },
   };
   const error = await decodeFailure(input);
-  assertEquals(error._tag, "ApiError");
-  assertEquals(error.message.includes("Unknown API error"), true);
+  assertEquals(error._tag, "SymbolNotFound");
 });
 
 Deno.test("decodeYahooResponse: missing both previousClose fields returns ParseError", async () => {

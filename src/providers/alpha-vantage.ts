@@ -4,10 +4,11 @@ import { HttpClient } from "@effect/platform";
 import { Config, Effect, Layer, Schema } from "effect";
 import type { StockQuote } from "../domain.ts";
 import {
-  ApiError,
   HttpError,
   NetworkError,
   ParseError,
+  ServiceError,
+  SymbolNotFound,
   StockApi,
 } from "../stock-api.ts";
 
@@ -28,22 +29,23 @@ type AlphaVantageGlobalQuoteType = typeof AlphaVantageGlobalQuote.Type;
 
 export function decodeAlphaVantageResponse(
   json: unknown,
-): Effect.Effect<StockQuote, ParseError | ApiError> {
+  symbol: string,
+): Effect.Effect<StockQuote, ParseError | SymbolNotFound | ServiceError> {
   if (typeof json !== "object" || json === null) {
     return Effect.fail(new ParseError({ message: "Response is not an object" }));
   }
 
   const obj = json as Record<string, unknown>;
 
-  // Alpha Vantage signals errors via top-level string fields.
+  // Alpha Vantage signals service-level errors via top-level string fields.
   if (typeof obj["Error Message"] === "string") {
-    return Effect.fail(new ApiError({ message: obj["Error Message"] }));
+    return Effect.fail(new ServiceError({ message: obj["Error Message"] }));
   }
   if (typeof obj["Note"] === "string") {
-    return Effect.fail(new ApiError({ message: obj["Note"] }));
+    return Effect.fail(new ServiceError({ message: obj["Note"] }));
   }
   if (typeof obj["Information"] === "string") {
-    return Effect.fail(new ApiError({ message: obj["Information"] }));
+    return Effect.fail(new ServiceError({ message: obj["Information"] }));
   }
 
   const globalQuote = obj["Global Quote"];
@@ -54,9 +56,7 @@ export function decodeAlphaVantageResponse(
     globalQuote === null ||
     Object.keys(globalQuote).length === 0
   ) {
-    return Effect.fail(
-      new ApiError({ message: "No data found for the requested symbol" }),
-    );
+    return Effect.fail(new SymbolNotFound({ symbol }));
   }
 
   return Schema.decodeUnknown(AlphaVantageGlobalQuote)(globalQuote).pipe(
@@ -111,7 +111,7 @@ export const AlphaVantageLive = Layer.effect(
             `${baseUrl}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
           const response = yield* client.get(url);
           const json = yield* response.json;
-          return yield* decodeAlphaVantageResponse(json);
+          return yield* decodeAlphaVantageResponse(json, symbol);
         }).pipe(
           Effect.catchTags({
             RequestError: (e) =>

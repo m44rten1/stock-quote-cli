@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { formatQuote, formatError } from "./format.ts";
-import { NetworkError, HttpError, ParseError, ApiError } from "./stock-api.ts";
+import { NetworkError, HttpError, ParseError, SymbolNotFound, ServiceError } from "./stock-api.ts";
 import type { StockQuote } from "./domain.ts";
 
 // --- Test data ---
@@ -64,9 +64,14 @@ Deno.test("formatError: HttpError 500 shows server error", () => {
   assertEquals(output.includes("Server error"), true);
 });
 
-Deno.test("formatError: ApiError shows symbol not found", () => {
-  const output = formatError(new ApiError({ message: "Yahoo API error" }));
+Deno.test("formatError: SymbolNotFound shows symbol not found", () => {
+  const output = formatError(new SymbolNotFound({ symbol: "XYZ" }));
   assertEquals(output.includes("Symbol not found"), true);
+});
+
+Deno.test("formatError: ServiceError shows service unavailable", () => {
+  const output = formatError(new ServiceError({ message: "Rate limit exceeded" }));
+  assertEquals(output.includes("Service unavailable"), true);
 });
 
 Deno.test("formatError: ParseError shows unexpected response", () => {

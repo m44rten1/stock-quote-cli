@@ -8,6 +8,7 @@ import {
   StockApi,
   type StockApiError,
 } from "./src/stock-api.ts";
+
 import { YahooFinanceLive } from "./src/providers/yahoo-finance.ts";
 import { AlphaVantageLive } from "./src/providers/alpha-vantage.ts";
 import { StockApiTestLive } from "./src/providers/stock-api-mock.ts";
@@ -83,7 +84,8 @@ cli(process.argv).pipe(
     NetworkError: logApiError,
     HttpError: logApiError,
     ParseError: logApiError,
-    ApiError: logApiError,
+    SymbolNotFound: logApiError,
+    ServiceError: logApiError,
   }),
   Effect.provide(StockApiLive),
   Effect.provide(NodeContext.layer),
