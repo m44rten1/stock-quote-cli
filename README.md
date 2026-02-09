@@ -1,4 +1,4 @@
-# learn-effect
+# stock-quote-cli
 
 A small but complete stock-quote CLI built with [Effect](https://effect.website), designed as a reference for developers learning the library. Every design choice is intentional — the goal is to show how Effect's concepts fit together in a real (if small) application, not just in isolated snippets.
 
