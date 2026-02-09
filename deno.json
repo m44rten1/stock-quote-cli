@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "dev": "deno run --env --allow-net --allow-read --allow-env --allow-sys --allow-ffi --watch main.ts",
+    "start": "deno run --env --allow-net --allow-read --allow-env --allow-sys --allow-ffi main.ts"
+  },
+  "imports": {
+    "@effect/cli": "npm:@effect/cli@^0.73.2",
+    "@effect/platform": "npm:@effect/platform@^0.94.4",
+    "@effect/platform-node": "npm:@effect/platform-node@^0.104.1",
+    "@std/assert": "jsr:@std/assert@1",
+    "effect": "npm:effect@^3.19.16"
+  }
+}
